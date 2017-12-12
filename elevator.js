@@ -48,11 +48,7 @@ export default
         this.floorsQueueDown[index] = false;
     },
     userCallElevator: function (floorNum, direction) {
-        console.log('User called an elevator to ' + ('up' === direction ? 'upstairs' : 'downstairs') + ' on floor ' + floorNum);
-        if (this.checkIfElevatorIsGoingHere(floorNum)) {
-            console.log('... but elevator is going there');
-            return;
-        }
+        this.showLogUserAction('User called an elevator to ' + ('up' === direction ? 'upstairs' : 'downstairs') + ' on floor ' + floorNum);
 
         if ('up' === direction) {
             this.floorsQueueUp[floorNum] = true;
@@ -60,29 +56,33 @@ export default
             this.floorsQueueDown[floorNum] = true;
         }
 
+        if (this.checkIfElevatorIsGoingHere(floorNum)) {
+            this.showLogUserAction('... but elevator is going there');
+            return;
+        }
+
         let elevatorIdleIndex = this.getElevatorIdle();
         if (null !== elevatorIdleIndex) {
             let elevator = this.elevators[elevatorIdleIndex];
-            console.log('... and idle elevator ' + elevatorIdleIndex + '[' + elevator.currentFloor() + '] => going to floor ' + floorNum);
+            this.showLog(elevatorIdleIndex, '... and idle elevator ' + elevatorIdleIndex + '[' + elevator.currentFloor() + '] => going to floor ' + floorNum);
             this.userCallFloor(elevatorIdleIndex, floorNum);
         }
     },
     userCallFloor: function (elevatorIndex, floorNum) {
         let elevator = this.elevators[elevatorIndex];
-        console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => user pressed floor ' + floorNum);
+        this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => user pressed floor ' + floorNum);
 
-        if (null === this.searchFloorInElevatorDestinationQueue(elevatorIndex, floorNum)) {
+        if (1 || null === this.searchFloorInElevatorDestinationQueue(elevatorIndex, floorNum)) {
             this.elevatorAddFloorToDestinationQueue(elevatorIndex, [floorNum]);
         }
-//        elevator.goToFloor(floorNum);
-        /* TODO: переделать на последовательное формиование очереди этажей */
 
         this.setElevatorNotIdle(elevatorIndex);
     },
     setElevatorIdle: function (elevatorIndex) {
         let elevator = this.elevators[elevatorIndex];
 
-        console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => going to be Idle');
+        this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => going to be Idle');
+        this.showLog(elevatorIndex, '... load is: ' + elevator.loadFactor());
 
         let newFloors = this.getClosestFloorsQueued(elevator.currentFloor());
         if (null !== newFloors) {
@@ -91,11 +91,10 @@ export default
         }
 
         this.elevatorGoToDefaultFloor(elevatorIndex);
-        /* TODO: глючит */
     },
     setElevatorNotIdle: function (elevatorIndex) {
         let elevator = this.elevators[elevatorIndex];
-        console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => starts moving');
+        this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => starts moving');
         this.elevatorsIdle[elevatorIndex] = false;
     },
     getElevatorIdle: function () {
@@ -128,29 +127,30 @@ export default
             return floors;
         }
         else {
-            console.log('... found no queued floors');
+            this.showLogUserAction('... found no queued floors');
             return null;
         }
     },
     elevatorGoToDefaultFloor: function (elevatorIndex) {
-        let defaultFloor = this.getElevatorDefaultFloor(elevatorIndex);
+        let defaultFloor = 0;//this.getElevatorDefaultFloor(elevatorIndex);
+        this.elevatorsIdle[elevatorIndex] = true;
+
         let elevator = this.elevators[defaultFloor];
         if (typeof elevator === 'undefined') {
-            this.elevatorsIdle[elevatorIndex] = true;
             return;
         }
 
         if (defaultFloor !== elevator.currentFloor()) {
-            console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => going to default floor: ' + defaultFloor);
-            elevator.goToFloor(defaultFloor);
+            this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => going to default floor: ' + defaultFloor);
+            this.elevatorAddFloorToDestinationQueue(elevatorIndex, defaultFloor);
         } else {
-            console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => is on default floor: ' + defaultFloor);
-            this.elevatorsIdle[elevatorIndex] = true;
+            this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => is on default floor: ' + defaultFloor);
+            elevator.stop();
         }
     },
     elevatorPassingFloor: function (elevatorIndex, floorNum, direction) {
         let elevator = this.elevators[elevatorIndex];
-        console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => gonna pass ' + ('up' === direction ? 'upstairs' : 'downstairs') + ' near floor: ' + floorNum);
+        this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => gonna pass ' + ('up' === direction ? 'upstairs' : 'downstairs') + ' near floor: ' + floorNum);
 
         let queueUp = [];
         let queueDown = [];
@@ -162,39 +162,32 @@ export default
                 queueDown.push(i);
             }
         }
-        console.log('... queueUp: ' + queueUp.join());
-        console.log('... queueDown: ' + queueDown.join());
+        this.showLog(elevatorIndex, '... queueUp: ' + queueUp.join());
+        this.showLog(elevatorIndex, '... queueDown: ' + queueDown.join());
+        this.showLog(elevatorIndex, '... load is: ' + elevator.loadFactor());
 
-        if (elevator.loadFactor() > 0.9) {
-            console.log('... but is full[' + elevator.loadFactor() + '] to pick up users');
+        if (elevator.loadFactor() > 0.5) {
+            this.showLog(elevatorIndex, '... but is full[' + elevator.loadFactor() + '] to pick up users');
             return;
         }
 
-        if ('up' === direction && true === this.floorsQueueUp[floorNum] && !this.checkIfElevatorIsGoingHere(floorNum)) {
-            console.log('... and gonna stop and pick up users going upstairs');
+        if ('up' === direction && true === this.floorsQueueUp[floorNum]) {
+            this.showLog(elevatorIndex, '... and gonna stop and pick up users going upstairs');
             this.elevatorAddFloorToDestinationQueue(elevatorIndex, [floorNum]);
-        } else if ('down' === direction && true === this.floorsQueueDown[floorNum] && !this.checkIfElevatorIsGoingHere(floorNum)) {
-            console.log('... and gonna stop and pick up users going downstairs');
+        } else if ('down' === direction && true === this.floorsQueueDown[floorNum]) {
+            this.showLog(elevatorIndex, '... and gonna stop and pick up users going downstairs');
             this.elevatorAddFloorToDestinationQueue(elevatorIndex, [floorNum]);
         }
     },
     elevatorStoppedOnFloor: function (elevatorIndex, floorNum) {
         let elevator = this.elevators[elevatorIndex];
-        console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => stopped on floor: ' + floorNum);
-        console.log('... with having queue ' + elevator.destinationQueue.join());
+        this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => stopped on floor: ' + floorNum);
+        this.showLog(elevatorIndex, '... with having queue ' + elevator.destinationQueue.join());
 
-        this.removeFloorFromEmptyElevatorsQueue(floorNum);
-        /* TODO: redirect moving here empty elevator */
+        // this.removeFloorFromEmptyElevatorsQueue(floorNum);
 
-        /*
-        if ('up' === direction && true === this.floorsQueueUp[floorNum]) {
-            this.removeFloorFromEmptyElevatorsQueue(floorNum);
-        }else if('down' === direction && true === this.floorsQueueDown[floorNum]) {
-            this.removeFloorFromEmptyElevatorsQueue(floorNum);
-        }
-        */
-
-        this.floorsQueueUp[floorNum] = false;
+        if( floorNum > 0 )
+            this.floorsQueueUp[floorNum] = false;
         this.floorsQueueDown[floorNum] = false;
     },
     elevatorAddFloorToDestinationQueue: function (elevatorIndex, newFloors) {
@@ -207,14 +200,14 @@ export default
 
         let direction = this.checkNewDirection(elevatorIndex, queue);
         if ('up' === direction) {
-            console.log('... queue sort up before ' + queue.join());
+            this.showLog(elevatorIndex, '... queue sort up before ' + queue.join());
             queue.sort();
-            console.log('... queue sort up after ' + queue.join());
+            this.showLog(elevatorIndex, '... queue sort up after ' + queue.join());
         } else {
-            console.log('... queue sort down before ' + queue.join());
+            this.showLog(elevatorIndex, '... queue sort down before ' + queue.join());
             queue.sort();
             queue.reverse();
-            console.log('... queue sort down after ' + queue.join());
+            this.showLog(elevatorIndex, '... queue sort down after ' + queue.join());
         }
 
         let filteredQueue = [];
@@ -229,10 +222,10 @@ export default
         if (elevator.loadFactor() === 0) {
             queue.sort();
             queue.reverse();
-            console.log('... elevator is empty, so go to the higher floor:' + queue.join());
+            this.showLog(elevatorIndex, '... elevator is empty, so go to the higher floor:' + queue.join());
         }
 
-        console.log('... set queue to: ' + queue.join());
+        this.showLog(elevatorIndex, '... set queue to: ' + queue.join());
         elevator.destinationQueue = queue;
         elevator.checkDestinationQueue();
     },
@@ -247,6 +240,10 @@ export default
             if (null !== destinationIndex) {
                 elevator.destinationQueue.splice(destinationIndex, 1);
                 elevator.checkDestinationQueue();
+
+                if (elevator.destinationQueue.length === 0 && elevator.loadFactor() === 0) {
+                    this.setElevatorIdle(i);
+                }
             }
         }
     },
@@ -271,7 +268,7 @@ export default
             }
         }
 
-        console.log('Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => going ' + (direction > 0 ? 'upstairs' : 'downstairs') + '(sum=' + direction + ') to floors ' + newFloors.join());
+        this.showLog(elevatorIndex, 'Elevator ' + elevatorIndex + '[' + elevator.currentFloor() + '] => going ' + (direction > 0 ? 'upstairs' : 'downstairs') + '(sum=' + direction + ') to floors ' + newFloors.join());
 
         if (direction >= 0) {
             return 'up';
@@ -288,6 +285,16 @@ export default
         }
 
         return null;
+    },
+    showLog: function (elevatorIndex, message) {
+        if (elevatorIndex === 0) {
+            console.log(message);
+        }
+    },
+    showLogUserAction: function (message) {
+        if( 1 ){
+            console.log(message);
+        }
     },
     update: function (dt, elevators, floors) {
         // We normally don't need to do anything here
